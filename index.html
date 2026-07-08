@@ -1,0 +1,1690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Personal Assistant</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#0A0E16">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Assistant">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0E16;
+    --bg-panel: #131A28;
+    --bg-panel-2: #1B2333;
+    --bg-panel-3: #212B3F;
+    --text: #F1EEE7;
+    --text-dim: #8B93A7;
+    --text-faint: #4C5568;
+    --border: #232B3D;
+
+    --idle-a: #6B7490;   --idle-b: #333B4F;   --idle-glow: rgba(107,116,144,0.35);
+    --listen-a: #8C9CFF; --listen-b: #4C56B8; --listen-glow: rgba(140,156,255,0.45);
+    --think-a: #FFB65C;  --think-b: #C97A2E;  --think-glow: rgba(255,182,92,0.45);
+    --speak-a: #FF7A5C;  --speak-b: #C7492E;  --speak-glow: rgba(255,122,92,0.45);
+    --live-a:  #5CFFB6;  --live-b:  #1F9E6E;  --live-glow: rgba(92,255,182,0.4);
+    --err: #FF6B6B;
+
+    --font-display: 'Space Grotesk', system-ui, sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-mono: 'Space Mono', ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  button:disabled { cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--listen-a);
+    outline-offset: 2px;
+  }
+  .hidden { display: none !important; }
+
+  /* ---------- Wake screen ---------- */
+  .wake-screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 22px;
+    background: radial-gradient(circle at 50% 38%, #171F30, var(--bg) 72%);
+    text-align: center;
+    padding: 24px;
+    z-index: 10;
+  }
+  .wake-eyebrow {
+    font-family: var(--font-mono);
+    letter-spacing: 0.22em;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .wake-orb-preview {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--idle-a), var(--idle-b) 75%);
+    box-shadow: 0 0 40px 8px var(--idle-glow);
+    animation: pulse-dim 3.6s ease-in-out infinite;
+  }
+  .wake-title {
+    font-family: var(--font-display);
+    font-size: clamp(26px, 6vw, 42px);
+    font-weight: 600;
+    max-width: 18ch;
+    line-height: 1.15;
+  }
+  .wake-sub {
+    color: var(--text-dim);
+    max-width: 38ch;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .wake-btn {
+    margin-top: 10px;
+    padding: 14px 34px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+  .wake-btn:hover { border-color: var(--listen-a); transform: translateY(-1px); }
+
+  /* ---------- App shell ---------- */
+  .app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+  .app > * { width: 100%; max-width: 640px; margin-left: auto; margin-right: auto; }
+
+  .header {
+    flex: 0 0 auto;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 20px 4px;
+  }
+  .header-left { display: flex; align-items: center; gap: 10px; }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em;
+    color: var(--text-faint); text-transform: uppercase;
+  }
+  #status {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em;
+    color: var(--text-dim);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--live-a);
+    box-shadow: 0 0 8px 1px var(--live-glow);
+    animation: blink 1.4s ease-in-out infinite;
+  }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  .header-btn {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-faint);
+    transition: color 0.2s ease, background 0.2s ease;
+  }
+  .header-btn:hover { color: var(--text); background: var(--bg-panel); }
+  .header-btn svg { width: 17px; height: 17px; }
+
+  .stage { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 0 2px; gap: 10px; position: relative; }
+  .orb-wrap { width: min(30vw, 150px); height: min(30vw, 150px); position: relative; }
+  .orb {
+    width: 100%; height: 100%;
+    border-radius: 60% 40% 55% 45% / 55% 45% 60% 40%;
+    background: radial-gradient(circle at 35% 30%, var(--idle-a), var(--idle-b) 75%);
+    box-shadow: 0 0 50px 6px var(--idle-glow);
+    animation: breathe 5s ease-in-out infinite, morph 11s ease-in-out infinite;
+    transition: background 0.5s ease, box-shadow 0.5s ease;
+  }
+  .orb.listening {
+    background: radial-gradient(circle at 35% 30%, var(--listen-a), var(--listen-b) 75%);
+    box-shadow: 0 0 60px 10px var(--listen-glow);
+    animation-duration: 1.6s, 11s;
+  }
+  .orb.thinking {
+    background: radial-gradient(circle at 35% 30%, var(--think-a), var(--think-b) 75%);
+    box-shadow: 0 0 60px 10px var(--think-glow);
+    animation-duration: 2.1s, 4s;
+  }
+  .orb.speaking {
+    background: radial-gradient(circle at 35% 30%, var(--speak-a), var(--speak-b) 75%);
+    box-shadow: 0 0 70px 12px var(--speak-glow);
+    animation-duration: 1.1s, 6s;
+  }
+  .orb-hint {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.2s ease;
+    pointer-events: none;
+  }
+  .orb-wrap.interruptible .orb-hint { opacity: 1; }
+  .orb-hint svg { width: 22px; height: 22px; color: rgba(10,14,22,0.55); }
+  .orb-wrap button.orb-btn { position: absolute; inset: -14px; border-radius: 50%; }
+
+  @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  @keyframes morph {
+    0%, 100% { border-radius: 60% 40% 55% 45% / 55% 45% 60% 40%; }
+    33% { border-radius: 45% 55% 40% 60% / 40% 60% 45% 55%; }
+    66% { border-radius: 55% 45% 60% 40% / 45% 55% 40% 60%; }
+  }
+  @keyframes pulse-dim { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.08); } }
+  @media (prefers-reduced-motion: reduce) {
+    .orb, .wake-orb-preview { animation: none !important; }
+  }
+
+  /* audio-reactive waveform bars, shown while actively listening */
+  .waveform {
+    display: flex; align-items: center; justify-content: center;
+    gap: 4px; height: 22px;
+    opacity: 0; transition: opacity 0.25s ease;
+  }
+  .waveform.active { opacity: 1; }
+  .waveform span {
+    display: block; width: 3px; min-height: 4px;
+    border-radius: 2px;
+    background: var(--listen-a);
+    transition: height 0.09s ease;
+  }
+
+  .caption {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-dim);
+    text-align: center;
+    min-height: 18px;
+    max-width: 80%;
+    padding: 0 8px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .caption.show { opacity: 1; }
+
+  .log {
+    flex: 1 1 auto; min-height: 0;
+    overflow-y: auto;
+    padding: 10px 20px 14px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .msg { max-width: 82%; line-height: 1.5; }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 16px 16px 4px 16px;
+    padding: 9px 14px;
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    font-family: var(--font-display);
+    font-size: 17px;
+    color: var(--text);
+    padding-right: 6px;
+  }
+  .msg.image-msg { max-width: 92%; }
+  .image-caption {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .msg.image-msg img {
+    width: 100%;
+    max-width: 340px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    display: block;
+    background: var(--bg-panel-2);
+  }
+  .msg.error {
+    align-self: center;
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,107,107,0.08);
+    border: 1px solid rgba(255,107,107,0.3);
+    border-radius: 12px;
+    padding: 9px 14px;
+    font-size: 13px;
+    color: var(--err);
+    max-width: 92%;
+  }
+  .msg.error button {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--err);
+    border: 1px solid rgba(255,107,107,0.4);
+    border-radius: 999px;
+    padding: 4px 10px;
+    flex: 0 0 auto;
+    transition: background 0.2s ease;
+  }
+  .msg.error button:hover { background: rgba(255,107,107,0.12); }
+
+  .controls {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 20px calc(16px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: var(--bg-panel);
+  }
+  .icon-btn {
+    width: 44px; height: 44px; flex: 0 0 auto;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-panel-2);
+    color: var(--text-dim);
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  }
+  .icon-btn:hover:not(:disabled) { border-color: var(--listen-a); color: var(--text); }
+  .icon-btn:disabled { opacity: 0.35; }
+  .icon-btn.active { border-color: var(--speak-a); color: var(--speak-a); }
+  .icon-btn.live { border-color: var(--live-a); color: var(--live-a); background: rgba(92,255,182,0.08); }
+  .icon-btn svg { width: 19px; height: 19px; }
+
+  .text-input {
+    flex: 1 1 auto; min-width: 0;
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 15px;
+    font-family: inherit;
+  }
+  .text-input::placeholder { color: var(--text-faint); }
+
+  .send-btn {
+    width: 44px; height: 44px; flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--speak-a);
+    color: #1A0D08;
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity 0.2s ease;
+  }
+  .send-btn:disabled { opacity: 0.35; }
+  .send-btn svg { width: 18px; height: 18px; }
+
+  /* ---------- Settings panel ---------- */
+  .sheet-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(6,8,13,0.6);
+    z-index: 19;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    max-width: 640px; margin: 0 auto;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 20px 20px 0 0;
+    padding: 20px 22px calc(24px + env(safe-area-inset-bottom));
+    z-index: 20;
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(.2,.9,.3,1);
+  }
+  .sheet.open { transform: translateY(0); }
+  .sheet h3 {
+    font-family: var(--font-display); font-size: 16px; font-weight: 600;
+    margin: 0 0 16px;
+  }
+  .sheet-row { margin-bottom: 18px; }
+  .sheet-row:last-child { margin-bottom: 0; }
+  .sheet-label {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px; color: var(--text-dim); margin-bottom: 8px;
+  }
+  .sheet-label span.val { font-family: var(--font-mono); color: var(--text); }
+  .sheet select, .sheet input[type="range"] { width: 100%; }
+  .sheet select {
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .sheet input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    height: 4px; border-radius: 2px;
+    background: var(--bg-panel-3);
+    accent-color: var(--listen-a);
+  }
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; color: var(--text);
+  }
+  .toggle {
+    width: 42px; height: 24px; border-radius: 999px;
+    background: var(--bg-panel-3);
+    position: relative;
+    transition: background 0.2s ease;
+    flex: 0 0 auto;
+  }
+  .toggle::after {
+    content: ""; position: absolute; top: 3px; left: 3px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--text-dim);
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+  .toggle.on { background: rgba(92,255,182,0.18); }
+  .toggle.on::after { transform: translateX(18px); background: var(--live-a); }
+
+  /* ---------- Camera panel ---------- */
+  .camera-panel {
+    position: fixed; inset: 0;
+    background: rgba(6,8,13,0.97);
+    z-index: 15;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px;
+    padding: 24px;
+  }
+  .camera-frame {
+    position: relative;
+    width: min(100%, 480px);
+    aspect-ratio: 3 / 4;
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #000;
+  }
+  #video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #video.mirrored { transform: scaleX(-1); }
+  .flash {
+    position: absolute; inset: 0; background: #fff;
+    opacity: 0; pointer-events: none;
+  }
+  .flash.pop { animation: flash-pop 0.35s ease; }
+  @keyframes flash-pop { 0% { opacity: 0.9; } 100% { opacity: 0; } }
+  .cam-switch-btn {
+    position: absolute; top: 12px; right: 12px;
+    width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(10,14,22,0.55);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cam-switch-btn svg { width: 18px; height: 18px; }
+  .live-cam-badge {
+    position: absolute; top: 12px; left: 12px;
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(10,14,22,0.6);
+    border: 1px solid rgba(92,255,182,0.4);
+    color: var(--live-a);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em;
+    padding: 5px 10px; border-radius: 999px;
+  }
+  .camera-controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .camera-controls button {
+    padding: 13px 22px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+  }
+  #captureBtn { background: var(--speak-a); color: #1A0D08; border-color: transparent; }
+  #liveCamBtn { background: var(--bg-panel-2); color: var(--live-a); border-color: rgba(92,255,182,0.35); }
+  #liveCamBtn.active { background: rgba(92,255,182,0.14); border-color: var(--live-a); }
+  #drawModeBtn { background: var(--bg-panel-2); color: var(--think-a); border-color: rgba(255,182,92,0.35); }
+  #drawModeBtn.active { background: rgba(255,182,92,0.14); border-color: var(--think-a); }
+  #drawCanvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  .draw-hint {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.03em;
+    color: var(--text); background: rgba(10,14,22,0.65);
+    padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+  }
+  #closeCamBtn { background: var(--bg-panel-2); color: var(--text-dim); }
+  .camera-hint { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); letter-spacing: 0.08em; text-align: center; max-width: 34ch; }
+
+  @media (max-width: 380px) {
+    .log { padding: 10px 14px 14px; }
+    .controls { padding: 12px 14px calc(16px + env(safe-area-inset-bottom)); }
+    .header { padding: 16px 14px 4px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wake-screen" id="wakeScreen">
+  <div class="wake-eyebrow">Personal Assistant</div>
+  <div class="wake-orb-preview"></div>
+  <div class="wake-title">Ready when you are</div>
+  <div class="wake-sub">Talk it out, back and forth, or type instead. Show me things through the camera too.</div>
+  <button class="wake-btn" id="wakeBtn">Start</button>
+</div>
+
+<div class="app hidden" id="app">
+  <div class="header">
+    <div class="header-left">
+      <div class="eyebrow">Assistant</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px;">
+      <span id="status">READY</span>
+      <button class="header-btn" id="settingsBtn" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="orb-wrap" id="orbWrap">
+      <div class="orb" id="orb"></div>
+      <div class="orb-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg></div>
+      <button class="orb-btn" id="orbBtn" aria-label="Tap to interrupt or start talking"></button>
+    </div>
+    <div class="waveform" id="waveform">
+      <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <div class="caption" id="caption"></div>
+  </div>
+
+  <div class="log" id="log"></div>
+
+  <div class="controls">
+    <button class="icon-btn" id="liveBtn" aria-label="Start live conversation" title="Live conversation (dual-side talk)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 12a4 4 0 1 1 8 0"></path>
+        <path d="M4.5 12a7.5 7.5 0 0 1 15 0"></path>
+        <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"></circle>
+      </svg>
+    </button>
+    <button class="icon-btn" id="micBtn" aria-label="Ask with your voice">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+        <path d="M5 11a7 7 0 0 0 14 0"></path>
+        <line x1="12" y1="18" x2="12" y2="22"></line>
+      </svg>
+    </button>
+    <input class="text-input" id="textInput" type="text" placeholder="Type a message\u2026" autocomplete="off">
+    <button class="icon-btn" id="camBtn" aria-label="Open camera">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+        <circle cx="12" cy="13" r="4"></circle>
+      </svg>
+    </button>
+    <button class="icon-btn" id="muteBtn" aria-label="Mute voice replies">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path class="mute-waves" d="M11 5 6 9H2v6h4l5 4V5z"></path>
+        <path class="mute-waves" d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+        <path class="mute-waves" d="M18.5 5.5a9 9 0 0 1 0 13"></path>
+        <path class="mute-slash" style="display:none" d="M11 5 6 9H2v6h4l5 4V5z"></path>
+        <line class="mute-slash" style="display:none" x1="23" y1="9" x2="17" y2="15"></line>
+        <line class="mute-slash" style="display:none" x1="17" y1="9" x2="23" y2="15"></line>
+      </svg>
+    </button>
+    <button class="send-btn" id="sendBtn" aria-label="Send message">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="sheetBackdrop"></div>
+<div class="sheet" id="sheet">
+  <h3>Settings</h3>
+  <div class="sheet-row">
+    <div class="toggle-row">
+      <span>Live conversation replies flow automatically</span>
+      <div class="toggle" id="autoListenToggle"></div>
+    </div>
+  </div>
+  <div class="sheet-row">
+    <div class="sheet-label"><span>Voice</span></div>
+    <select id="voiceSelect"></select>
+  </div>
+  <div class="sheet-row">
+    <div class="sheet-label"><span>Speaking rate</span><span class="val" id="rateVal">1.0x</span></div>
+    <input type="range" id="rateRange" min="0.7" max="1.4" step="0.05" value="1">
+  </div>
+  <div class="sheet-row">
+    <button id="newChatBtn" style="width:100%; padding:12px; border-radius:10px; background:rgba(255,107,107,0.08); border:1px solid rgba(255,107,107,0.3); color:var(--err); font-size:14px; font-weight:500;">Start new chat (clears history)</button>
+  </div>
+</div>
+
+<div class="camera-panel hidden" id="cameraPanel">
+  <div class="camera-frame">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="drawCanvas"></canvas>
+    <div class="flash" id="flash"></div>
+    <div class="live-cam-badge hidden" id="liveCamBadge"><span class="live-dot"></span>LIVE</div>
+    <div class="draw-hint hidden" id="drawHint">\u261D\uFE0F point to draw \u00b7 \u270B palm to lift pen \u00b7 \u270A fist to clear</div>
+    <button class="cam-switch-btn" id="switchCamBtn" aria-label="Switch camera" title="Switch camera">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 2 21 6 17 10"></path>
+        <path d="M3 12v-2a4 4 0 0 1 4-4h14"></path>
+        <path d="M7 22 3 18 7 14"></path>
+        <path d="M21 12v2a4 4 0 0 1-4 4H3"></path>
+      </svg>
+    </button>
+  </div>
+  <div class="camera-controls">
+    <button id="captureBtn">Describe this</button>
+    <button id="liveCamBtn">Go live</button>
+    <button id="drawModeBtn">Draw</button>
+    <button id="closeCamBtn">Close</button>
+  </div>
+  <div class="camera-hint" id="cameraHint"></div>
+</div>
+<canvas id="canvas" class="hidden"></canvas>
+
+<script>
+(function () {
+  "use strict";
+
+  var API_URL = "/api/chat";
+  var SEARCH_URL = "/api/search";
+  var TRANSCRIBE_URL = "/api/transcribe";
+  var SYSTEM_PROMPT = "You are a warm, capable personal voice assistant, in the spirit of a helpful companion like Jarvis. The user is speaking or typing to you in a live back-and-forth conversation, and your reply will be read aloud with text-to-speech, so write the way a person would speak: concise and conversational, usually 1 to 3 sentences, unless the user clearly asks for more depth. You have broad general knowledge and can help with almost anything. If you're shown a photo through the camera, describe what's relevant and interesting about it the way a companion glancing over someone's shoulder would. Reply in whatever language the user is using, or the language they explicitly ask for. On the very first line of every reply, output only a language tag in the exact format [[lang:xx-XX]] using the correct BCP-47 code for the language of your reply (e.g. [[lang:en-US]], [[lang:es-ES]], [[lang:hi-IN]], [[lang:fr-FR]]), then a newline, then your actual reply with no mention of the tag. If, and only if, the user explicitly asks you to generate, draw, create, paint, or make an image or picture (not when they are just showing you one through the camera), write a brief spoken acknowledgement, then on its own new line add a tag in the exact format [[image: a short, vivid, English description for the picture]] describing what to generate, with no other mention of the tag. If the user asks about something current, real-time, or fast-changing that you cannot know reliably (news, sports scores, current prices or weather, latest anything, or anything date-dependent on today), do not guess or use outdated knowledge - instead respond with ONLY a tag in the exact format [[search: a concise web search query]] and absolutely nothing else on that turn (no language tag, no other words).";
+
+  var state = {
+    messages: [],
+    muted: false,
+    stream: null,
+    facingMode: "environment",
+    busy: false,
+    liveMode: false,      // dual-side continuous conversation
+    autoListen: true,     // whether live mode auto-resumes listening after a reply
+    listening: false,
+    speaking: false,
+    lastUserTurn: null,   // { displayText, apiContent } for retry
+    audioCtx: null,
+    analyser: null,
+    micStream: null,
+    rafId: null,
+    voice: null,
+    rate: 1,
+    cameraLive: false,
+    liveCamTimer: null,
+    lastLiveDesc: null,
+    displayLog: [],
+    hasRestoredHistory: false,
+    recording: false,
+    mediaRecorder: null,
+    vadAudioCtx: null,
+    vadFallbackTimer: null,
+    drawMode: false,
+    handsInstance: null,
+    handsScriptLoaded: false,
+    drawLastPoint: null,
+    drawLoopActive: false
+  };
+  var els = {};
+  var recognitionSupported = false;
+
+  document.addEventListener("DOMContentLoaded", init);
+
+  function init() {
+    els.wakeScreen = document.getElementById("wakeScreen");
+    els.app = document.getElementById("app");
+    els.wakeBtn = document.getElementById("wakeBtn");
+    els.orbWrap = document.getElementById("orbWrap");
+    els.orb = document.getElementById("orb");
+    els.orbBtn = document.getElementById("orbBtn");
+    els.waveform = document.getElementById("waveform");
+    els.caption = document.getElementById("caption");
+    els.status = document.getElementById("status");
+    els.log = document.getElementById("log");
+    els.textInput = document.getElementById("textInput");
+    els.sendBtn = document.getElementById("sendBtn");
+    els.micBtn = document.getElementById("micBtn");
+    els.liveBtn = document.getElementById("liveBtn");
+    els.camBtn = document.getElementById("camBtn");
+    els.muteBtn = document.getElementById("muteBtn");
+    els.settingsBtn = document.getElementById("settingsBtn");
+    els.sheet = document.getElementById("sheet");
+    els.sheetBackdrop = document.getElementById("sheetBackdrop");
+    els.autoListenToggle = document.getElementById("autoListenToggle");
+    els.newChatBtn = document.getElementById("newChatBtn");
+    els.voiceSelect = document.getElementById("voiceSelect");
+    els.rateRange = document.getElementById("rateRange");
+    els.rateVal = document.getElementById("rateVal");
+    els.cameraPanel = document.getElementById("cameraPanel");
+    els.video = document.getElementById("video");
+    els.canvas = document.getElementById("canvas");
+    els.captureBtn = document.getElementById("captureBtn");
+    els.liveCamBtn = document.getElementById("liveCamBtn");
+    els.drawModeBtn = document.getElementById("drawModeBtn");
+    els.drawCanvas = document.getElementById("drawCanvas");
+    els.drawHint = document.getElementById("drawHint");
+    els.liveCamBadge = document.getElementById("liveCamBadge");
+    els.closeCamBtn = document.getElementById("closeCamBtn");
+    els.switchCamBtn = document.getElementById("switchCamBtn");
+    els.flash = document.getElementById("flash");
+    els.cameraHint = document.getElementById("cameraHint");
+    els.waveBars = els.waveform.querySelectorAll("span");
+
+    els.wakeBtn.addEventListener("click", wake);
+    els.sendBtn.addEventListener("click", handleSend);
+    els.textInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") handleSend();
+    });
+    els.muteBtn.addEventListener("click", toggleMute);
+    els.camBtn.addEventListener("click", openCamera);
+    els.closeCamBtn.addEventListener("click", closeCamera);
+    els.switchCamBtn.addEventListener("click", switchCamera);
+    els.captureBtn.addEventListener("click", captureAndDescribe);
+    els.liveCamBtn.addEventListener("click", toggleCameraLive);
+    els.drawModeBtn.addEventListener("click", toggleDrawMode);
+    els.liveBtn.addEventListener("click", toggleLiveMode);
+    els.orbBtn.addEventListener("click", handleOrbTap);
+    els.settingsBtn.addEventListener("click", openSettings);
+    els.sheetBackdrop.addEventListener("click", closeSettings);
+    els.newChatBtn.addEventListener("click", function () {
+      clearHistory();
+      closeSettings();
+    });
+    els.autoListenToggle.addEventListener("click", function () {
+      state.autoListen = !state.autoListen;
+      els.autoListenToggle.classList.toggle("on", state.autoListen);
+    });
+    els.rateRange.addEventListener("input", function () {
+      state.rate = parseFloat(els.rateRange.value);
+      els.rateVal.textContent = state.rate.toFixed(2).replace(/0$/, "") + "x";
+    });
+    els.voiceSelect.addEventListener("change", function () {
+      var voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+      state.voice = voices[els.voiceSelect.value] || null;
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        if (!els.cameraPanel.classList.contains("hidden")) closeCamera();
+        else if (els.sheet.classList.contains("open")) closeSettings();
+        else if (state.liveMode) toggleLiveMode();
+      }
+    });
+
+    els.autoListenToggle.classList.toggle("on", state.autoListen);
+
+    setupVoiceInput();
+    setupVoices();
+
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+      els.camBtn.disabled = true;
+      els.camBtn.title = "Camera isn't available in this browser";
+    }
+
+    state.hasRestoredHistory = loadHistory();
+  }
+
+  function wake() {
+    els.wakeScreen.classList.add("hidden");
+    els.app.classList.remove("hidden");
+    els.textInput.focus();
+    if (!state.hasRestoredHistory) {
+      speak("Hello, I'm here. You can type, tap the mic for one question, or start a live conversation and we'll go back and forth hands-free.");
+    }
+  }
+
+  /* ---------- status / orb ---------- */
+
+  function setStatus(s) {
+    els.orb.className = "orb " + s;
+    var labels = { idle: "READY", listening: "LISTENING", thinking: "THINKING", speaking: "SPEAKING" };
+    var label = labels[s] || "READY";
+    if (state.liveMode) {
+      els.status.innerHTML = '<span class="live-dot"></span>LIVE \u00b7 ' + label;
+    } else {
+      els.status.textContent = label;
+    }
+    els.orbWrap.classList.toggle("interruptible", s === "speaking");
+  }
+
+  var HISTORY_KEY = "personalAssistantChatHistory_v1";
+
+  function sanitizeMessagesForStorage(messages) {
+    return messages.slice(-40).map(function (m) {
+      if (typeof m.content === "string") return { role: m.role, content: m.content };
+      var textParts = m.content.filter(function (b) { return b.type === "text"; }).map(function (b) { return b.text; });
+      var hadImage = m.content.some(function (b) { return b.type === "image"; });
+      var summary = (hadImage ? "[Shared a photo] " : "") + textParts.join(" ");
+      return { role: m.role, content: summary.trim() || (hadImage ? "[Shared a photo]" : "") };
+    });
+  }
+
+  function persistHistory() {
+    try {
+      var payload = {
+        apiMessages: sanitizeMessagesForStorage(state.messages),
+        displayLog: state.displayLog.slice(-40)
+      };
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(payload));
+    } catch (e) {
+      // Storage unavailable (private browsing, quota, or a sandboxed preview) - fail silently.
+    }
+  }
+
+  function clearHistory() {
+    try { localStorage.removeItem(HISTORY_KEY); } catch (e) {}
+    state.messages = [];
+    state.displayLog = [];
+    els.log.innerHTML = "";
+  }
+
+  function renderRestoredItem(item) {
+    if (item.kind === "image") {
+      var div = document.createElement("div");
+      div.className = "msg assistant image-msg";
+      var caption = document.createElement("div");
+      caption.className = "image-caption";
+      caption.textContent = "\uD83C\uDFA8 " + item.prompt;
+      div.appendChild(caption);
+      var img = document.createElement("img");
+      img.alt = item.prompt;
+      img.loading = "lazy";
+      img.src = item.url;
+      div.appendChild(img);
+      els.log.appendChild(div);
+    } else if (item.kind === "error") {
+      var ediv = document.createElement("div");
+      ediv.className = "msg error";
+      var span = document.createElement("span");
+      span.textContent = item.text;
+      ediv.appendChild(span);
+      els.log.appendChild(ediv);
+    } else {
+      var d = document.createElement("div");
+      d.className = "msg " + item.role;
+      d.textContent = item.text;
+      els.log.appendChild(d);
+    }
+  }
+
+  function loadHistory() {
+    try {
+      var raw = localStorage.getItem(HISTORY_KEY);
+      if (!raw) return false;
+      var data = JSON.parse(raw);
+      if (!data || !data.displayLog || !data.displayLog.length) return false;
+      state.messages = data.apiMessages || [];
+      state.displayLog = data.displayLog;
+      data.displayLog.forEach(renderRestoredItem);
+      var divider = document.createElement("div");
+      divider.style.cssText = "text-align:center;font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;color:var(--text-faint);margin:2px 0 10px;";
+      divider.textContent = "\u2014 resumed \u2014";
+      els.log.insertBefore(divider, els.log.firstChild);
+      els.log.scrollTop = els.log.scrollHeight;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function addMessage(role, text) {
+    var div = document.createElement("div");
+    div.className = "msg " + role;
+    div.textContent = text;
+    els.log.appendChild(div);
+    els.log.scrollTop = els.log.scrollHeight;
+    state.displayLog.push({ kind: "text", role: role, text: text });
+    persistHistory();
+    return div;
+  }
+
+  function addGeneratedImage(promptText) {
+    var div = document.createElement("div");
+    div.className = "msg assistant image-msg";
+    var caption = document.createElement("div");
+    caption.className = "image-caption";
+    caption.textContent = "\uD83C\uDFA8 generating: " + promptText;
+    div.appendChild(caption);
+    var img = document.createElement("img");
+    img.alt = promptText;
+    img.loading = "lazy";
+    var seed = Math.floor(Math.random() * 1e9);
+    img.src = "https://image.pollinations.ai/prompt/" + encodeURIComponent(promptText) +
+      "?width=768&height=768&nologo=true&model=flux&seed=" + seed;
+    img.onload = function () { caption.textContent = "\uD83C\uDFA8 " + promptText; };
+    img.onerror = function () {
+      caption.textContent = "Couldn't generate that image just now.";
+      img.remove();
+    };
+    div.appendChild(img);
+    els.log.appendChild(div);
+    els.log.scrollTop = els.log.scrollHeight;
+    state.displayLog.push({ kind: "image", prompt: promptText, url: img.src });
+    persistHistory();
+  }
+
+  function addErrorMessage(text, onRetry) {
+    var div = document.createElement("div");
+    div.className = "msg error";
+    var span = document.createElement("span");
+    span.textContent = text;
+    div.appendChild(span);
+    if (onRetry) {
+      var btn = document.createElement("button");
+      btn.textContent = "Retry";
+      btn.addEventListener("click", function () {
+        div.remove();
+        onRetry();
+      });
+      div.appendChild(btn);
+    }
+    els.log.appendChild(div);
+    els.log.scrollTop = els.log.scrollHeight;
+    state.displayLog.push({ kind: "error", text: text });
+    persistHistory();
+  }
+
+  function setCaption(text) {
+    els.caption.textContent = text || "";
+    els.caption.classList.toggle("show", !!text);
+  }
+
+  /* ---------- speech synthesis ---------- */
+
+  function setupVoices() {
+    if (!("speechSynthesis" in window)) return;
+    function populate() {
+      var voices = window.speechSynthesis.getVoices();
+      if (!voices.length) return;
+      els.voiceSelect.innerHTML = "";
+      voices.forEach(function (v, i) {
+        var opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = v.name + " (" + v.lang + ")";
+        els.voiceSelect.appendChild(opt);
+      });
+      var preferredIdx = voices.findIndex(function (v) { return /en/i.test(v.lang) && v.localService; });
+      if (preferredIdx === -1) preferredIdx = 0;
+      els.voiceSelect.value = preferredIdx;
+      state.voice = voices[preferredIdx];
+    }
+    populate();
+    window.speechSynthesis.onvoiceschanged = populate;
+  }
+
+  function pickVoiceForLang(langCode) {
+    if (!("speechSynthesis" in window)) return null;
+    var voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return state.voice;
+    var short = (langCode || "").toLowerCase().slice(0, 2);
+    // If the user's manually chosen voice already matches this language, keep it.
+    if (state.voice && state.voice.lang && state.voice.lang.toLowerCase().slice(0, 2) === short) {
+      return state.voice;
+    }
+    // Otherwise find the best available voice for this language.
+    var exact = voices.find(function (v) { return v.lang.toLowerCase() === (langCode || "").toLowerCase(); });
+    if (exact) return exact;
+    var partial = voices.find(function (v) { return v.lang.toLowerCase().slice(0, 2) === short; });
+    if (partial) return partial;
+    return state.voice; // fall back to whatever's selected
+  }
+
+  function speak(text, langCode) {
+    return new Promise(function (resolve) {
+      if (state.muted || !("speechSynthesis" in window)) {
+        setStatus("idle");
+        resolve();
+        return;
+      }
+      window.speechSynthesis.cancel();
+      var utter = new SpeechSynthesisUtterance(text);
+      var voice = langCode ? pickVoiceForLang(langCode) : state.voice;
+      if (voice) utter.voice = voice;
+      utter.lang = langCode || (voice && voice.lang) || "en-US";
+      utter.rate = state.rate || 1;
+      var settled = false;
+      utter.onstart = function () { state.speaking = true; setStatus("speaking"); };
+      utter.onend = function () {
+        state.speaking = false;
+        if (settled) return;
+        settled = true;
+        setStatus("idle");
+        resolve();
+      };
+      utter.onerror = function () {
+        state.speaking = false;
+        if (settled) return;
+        settled = true;
+        setStatus("idle");
+        resolve();
+      };
+      window.speechSynthesis.speak(utter);
+    });
+  }
+
+  function toggleMute() {
+    state.muted = !state.muted;
+    els.muteBtn.classList.toggle("active", state.muted);
+    els.muteBtn.setAttribute("aria-label", state.muted ? "Unmute voice replies" : "Mute voice replies");
+    els.muteBtn.querySelector(".mute-slash").style.display = state.muted ? "block" : "none";
+    els.muteBtn.querySelectorAll(".mute-slash").forEach(function (n) { n.style.display = state.muted ? "block" : "none"; });
+    els.muteBtn.querySelectorAll(".mute-waves").forEach(function (n) { n.style.display = state.muted ? "none" : "block"; });
+    if (state.muted && "speechSynthesis" in window) window.speechSynthesis.cancel();
+  }
+
+  /* ---------- settings sheet ---------- */
+
+  function openSettings() {
+    els.sheet.classList.add("open");
+    els.sheetBackdrop.classList.add("open");
+  }
+  function closeSettings() {
+    els.sheet.classList.remove("open");
+    els.sheetBackdrop.classList.remove("open");
+  }
+
+  /* ---------- voice input: record + Whisper transcription ---------- */
+  // Browser SpeechRecognition was unreliable (misheard words, silent failures on
+  // mobile). Instead we record actual audio and send it to Groq's free Whisper
+  // API for transcription - slower per-turn (records, then a short upload/wait)
+  // but meaningfully more accurate, especially for accents and non-English speech.
+
+  var SILENCE_MS = 1100;      // how long a lull has to last before we consider the turn done
+  var MAX_RECORD_MS = 15000;  // hard cap so a stuck mic can't record forever
+  var MIN_RECORD_MS = 350;    // ignore accidental taps/blips shorter than this
+  var VOLUME_THRESHOLD = 10;  // 0-127 scale; tune if it's cutting off too early/late
+
+  function setupVoiceInput() {
+    var supported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+    recognitionSupported = supported;
+    if (!supported) {
+      els.micBtn.disabled = true;
+      els.micBtn.title = "Voice input isn't supported in this browser \u2014 type instead";
+      els.liveBtn.disabled = true;
+      els.liveBtn.title = "Live conversation needs voice input, which isn't supported in this browser";
+      return;
+    }
+    els.micBtn.addEventListener("click", function () {
+      if (state.liveMode) return; // live mode owns the mic
+      startListening();
+    });
+  }
+
+  function ensureMicStream() {
+    if (state.micStream && state.micStream.getAudioTracks().some(function (t) { return t.readyState === "live"; })) {
+      return Promise.resolve(state.micStream);
+    }
+    return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      state.micStream = stream;
+      return stream;
+    });
+  }
+
+  function startListening() {
+    if (!recognitionSupported || state.busy || state.recording) return;
+    if (state.speaking) window.speechSynthesis.cancel();
+    ensureMicStream()
+      .then(beginRecording)
+      .catch(function (err) {
+        addErrorMessage("Couldn't start the microphone (" + (err && err.message ? err.message : "permission denied") + ").");
+        setStatus("idle");
+      });
+  }
+
+  function beginRecording(stream) {
+    state.recording = true;
+    state.listening = true;
+    setStatus("listening");
+    setCaption("Listening\u2026");
+    els.waveform.classList.add("active");
+
+    var chunks = [];
+    var mimeType = "";
+    ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].some(function (t) {
+      if (window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(t)) { mimeType = t; return true; }
+      return false;
+    });
+    var recorder;
+    try {
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
+    } catch (err) {
+      state.recording = false;
+      state.listening = false;
+      els.waveform.classList.remove("active");
+      setCaption("");
+      setStatus("idle");
+      addErrorMessage("Couldn't start recording (" + err.message + ").");
+      return;
+    }
+    state.mediaRecorder = recorder;
+    var startTime = Date.now();
+
+    recorder.ondataavailable = function (e) {
+      if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+    recorder.onstop = function () {
+      stopVAD();
+      els.waveform.classList.remove("active");
+      state.recording = false;
+      state.listening = false;
+      var elapsed = Date.now() - startTime;
+      var blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
+      if (elapsed < MIN_RECORD_MS || blob.size < 800) {
+        setCaption("");
+        setStatus("idle");
+        if (state.liveMode && state.autoListen) scheduleAutoListen(400);
+        return;
+      }
+      setStatus("thinking");
+      setCaption("Transcribing\u2026");
+      transcribeAudio(blob)
+        .then(function (text) {
+          setCaption("");
+          text = (text || "").trim();
+          if (text) {
+            askClaude(text, text);
+          } else {
+            setStatus("idle");
+            if (state.liveMode && state.autoListen) scheduleAutoListen(400);
+          }
+        })
+        .catch(function (err) {
+          setCaption("");
+          setStatus("idle");
+          addErrorMessage("Couldn't transcribe that (" + (err && err.message ? err.message : "error") + ").");
+          if (state.liveMode && state.autoListen) scheduleAutoListen(900);
+        });
+    };
+
+    recorder.start();
+    runVAD(stream, startTime);
+  }
+
+  function stopListening() {
+    if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
+      try { state.mediaRecorder.stop(); } catch (err) {}
+    }
+  }
+
+  function runVAD(stream, startTime) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) {
+      // No VAD available - just cap the recording at a fixed, shorter duration.
+      state.vadFallbackTimer = setTimeout(stopListening, 6000);
+      return;
+    }
+    var ctx = new AC();
+    var source = ctx.createMediaStreamSource(stream);
+    var analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+    state.vadAudioCtx = ctx;
+    var data = new Uint8Array(analyser.frequencyBinCount);
+    var silenceStart = null;
+    var speechDetected = false;
+
+    function tick() {
+      if (!state.recording) return;
+      analyser.getByteTimeDomainData(data);
+      var sum = 0;
+      for (var i = 0; i < data.length; i++) sum += Math.abs(data[i] - 128);
+      var avg = sum / data.length;
+      updateWaveformBars(avg);
+      var now = Date.now();
+      if (avg > VOLUME_THRESHOLD) {
+        speechDetected = true;
+        silenceStart = null;
+      } else if (speechDetected) {
+        if (silenceStart === null) silenceStart = now;
+        else if (now - silenceStart > SILENCE_MS) { stopListening(); return; }
+      }
+      if (now - startTime > MAX_RECORD_MS) { stopListening(); return; }
+      state.rafId = requestAnimationFrame(tick);
+    }
+    tick();
+  }
+
+  function stopVAD() {
+    if (state.rafId) { cancelAnimationFrame(state.rafId); state.rafId = null; }
+    if (state.vadFallbackTimer) { clearTimeout(state.vadFallbackTimer); state.vadFallbackTimer = null; }
+    if (state.vadAudioCtx) { state.vadAudioCtx.close().catch(function () {}); state.vadAudioCtx = null; }
+    els.waveBars.forEach(function (bar) { bar.style.height = "4px"; });
+  }
+
+  function updateWaveformBars(level) {
+    var h = Math.max(4, Math.min(22, (level / 40) * 22));
+    els.waveBars.forEach(function (bar, i) {
+      var jitter = 0.7 + Math.sin(Date.now() / 90 + i) * 0.3;
+      bar.style.height = Math.max(4, h * jitter) + "px";
+    });
+  }
+
+  function blobToBase64(blob) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onloadend = function () { resolve(reader.result.split(",")[1]); };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function transcribeAudio(blob) {
+    return blobToBase64(blob)
+      .then(function (base64) {
+        return fetch(TRANSCRIBE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audioBase64: base64, mimeType: blob.type })
+        });
+      })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+          return data.text || "";
+        });
+      });
+  }
+
+  var autoListenTimer = null;
+  function scheduleAutoListen(delay) {
+    clearTimeout(autoListenTimer);
+    autoListenTimer = setTimeout(function () {
+      if (state.liveMode && state.autoListen && !state.busy && !state.speaking && !state.listening) {
+        startListening();
+      }
+    }, delay || 300);
+  }
+
+  /* ---------- live "dual-side talk" mode ---------- */
+
+  function toggleLiveMode() {
+    if (!recognitionSupported) {
+      addErrorMessage("This browser doesn't support voice input, so live conversation isn't available here. Try Chrome or Safari, or use typing instead.");
+      return;
+    }
+    state.liveMode = !state.liveMode;
+    els.liveBtn.classList.toggle("live", state.liveMode);
+    els.liveBtn.setAttribute("aria-label", state.liveMode ? "Stop live conversation" : "Start live conversation");
+    if (state.liveMode) {
+      els.micBtn.disabled = true;
+      setStatus("idle");
+      if (!state.busy) startListening();
+    } else {
+      els.micBtn.disabled = false;
+      clearTimeout(autoListenTimer);
+      stopListening();
+      setCaption("");
+      setStatus("idle");
+    }
+  }
+
+  function handleOrbTap() {
+    // Interrupt: if the assistant is talking, stop it and jump straight to listening.
+    if (state.speaking) {
+      window.speechSynthesis.cancel();
+      state.speaking = false;
+      setStatus("idle");
+      if (state.liveMode || recognitionSupported) startListening();
+      return;
+    }
+    // Otherwise a tap on the orb is a quick way to start a one-off listen.
+    if (!state.listening && !state.busy && recognitionSupported) startListening();
+  }
+
+
+  /* ---------- text input ---------- */
+
+  function handleSend() {
+    var text = els.textInput.value.trim();
+    if (!text) return;
+    els.textInput.value = "";
+    askClaude(text, text);
+  }
+
+  /* ---------- talking to Claude ---------- */
+
+  function fetchChatCompletion(messagesForApi) {
+    return fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system: SYSTEM_PROMPT,
+        messages: messagesForApi
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return null; }).then(function (errBody) {
+            var detail = (errBody && errBody.error) ? errBody.error : ("HTTP " + res.status);
+            var err = new Error(detail);
+            err.status = res.status;
+            throw err;
+          });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        return (data.content || [])
+          .filter(function (b) { return b.type === "text"; })
+          .map(function (b) { return b.text; })
+          .join("")
+          .trim() || "I'm not sure how to answer that.";
+      });
+  }
+
+  function performSearch(query) {
+    return fetch(SEARCH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: query })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) { return data.summary || ("No results found for \"" + query + "\"."); })
+      .catch(function () { return "Web search failed for \"" + query + "\"."; });
+  }
+
+  function askClaude(displayText, apiContent) {
+    if (state.busy) return;
+    state.busy = true;
+    state.lastUserTurn = { displayText: displayText, apiContent: apiContent, startLen: state.messages.length };
+    addMessage("user", displayText);
+    state.messages.push({ role: "user", content: apiContent });
+    persistHistory();
+    setStatus("thinking");
+
+    fetchChatCompletion(state.messages)
+      .then(handleReply)
+      .catch(handleAskError);
+  }
+
+  function handleReply(reply) {
+    // A reply that is ONLY a search tag (no language tag, nothing else) means the
+    // model wants current info before answering - go fetch it, then ask again.
+    var searchOnlyMatch = reply.trim().match(/^\[\[search:\s*([^\]]+)\]\]$/i);
+    if (searchOnlyMatch) {
+      var query = searchOnlyMatch[1].trim();
+      addMessage("assistant", "\uD83D\uDD0E Searching: " + query);
+      return performSearch(query).then(function (summary) {
+        state.messages.push({
+          role: "user",
+          content: "[Web search results for \"" + query + "\"]:\n" + summary +
+            "\n\nUsing these results if relevant, answer my earlier question conversationally."
+        });
+        persistHistory();
+        return fetchChatCompletion(state.messages).then(finishReply);
+      });
+    }
+    return finishReply(reply);
+  }
+
+  function finishReply(reply) {
+    var langCode = null;
+    var tagMatch = reply.match(/^\[\[lang:([a-zA-Z-]+)\]\]\s*/);
+    if (tagMatch) {
+      langCode = tagMatch[1];
+      reply = reply.slice(tagMatch[0].length).trim();
+    }
+    var imgMatch = reply.match(/\[\[image:\s*([^\]]+)\]\]/i);
+    var imagePrompt = null;
+    if (imgMatch) {
+      imagePrompt = imgMatch[1].trim();
+      reply = (reply.slice(0, imgMatch.index) + reply.slice(imgMatch.index + imgMatch[0].length)).trim();
+    }
+    state.messages.push({ role: "assistant", content: (imgMatch ? imgMatch[0] + " " : "") + reply });
+    persistHistory();
+    if (reply) addMessage("assistant", reply);
+    if (imagePrompt) addGeneratedImage(imagePrompt);
+    state.busy = false;
+    return speak(reply || ("Here's " + (imagePrompt || "that") + "."), langCode).then(function () {
+      if (state.liveMode && state.autoListen) scheduleAutoListen(250);
+    });
+  }
+
+  function handleAskError(err) {
+    state.busy = false;
+    // roll back everything pushed during this turn (user turn, and any search
+    // round-trip) so a retry doesn't duplicate or corrupt context
+    state.messages.length = state.lastUserTurn.startLen;
+    persistHistory();
+    var detail = err && err.message ? err.message : "network error";
+    var friendly = "Couldn't reach the assistant (" + detail + ").";
+    if (err && err.status === 429) {
+      var isDaily = /day|daily|RPD|quota/i.test(detail);
+      friendly = isDaily
+        ? "Hit today's free-tier request quota: " + detail + ". This won't clear until it resets (Gemini resets daily quotas at midnight Pacific time)."
+        : "Hit the free-tier per-minute rate limit: " + detail + ". Wait about a minute, then retry.";
+    }
+    addErrorMessage(friendly, function () {
+      askClaude(state.lastUserTurn.displayText, state.lastUserTurn.apiContent);
+    });
+    setStatus("idle");
+    if (state.liveMode && state.autoListen) scheduleAutoListen(600);
+  }
+
+  /* ---------- camera ---------- */
+
+  function openCamera(facingOverride) {
+    var facing = facingOverride || state.facingMode;
+    closeCameraStreamOnly(); // release the current camera before requesting the other one
+    var doRequest = function () {
+      var constraints = { video: { facingMode: { ideal: facing } } };
+      navigator.mediaDevices.getUserMedia(constraints)
+        .catch(function () { return navigator.mediaDevices.getUserMedia({ video: true }); })
+        .then(function (stream) {
+          state.stream = stream;
+          state.facingMode = facing;
+          els.video.srcObject = stream;
+          els.video.classList.toggle("mirrored", facing === "user");
+          els.video.play().catch(function () {});
+          els.cameraPanel.classList.remove("hidden");
+          els.cameraHint.textContent = "";
+          resizeDrawCanvas();
+        })
+        .catch(function () {
+          var msg = "I couldn't get to your camera. Check that camera access is allowed for this page, then try again.";
+          addErrorMessage(msg, openCamera);
+          speak(msg);
+        });
+    };
+    // Give the hardware a beat to release the previous stream before grabbing the next one.
+    setTimeout(doRequest, 150);
+  }
+
+  function switchCamera() {
+    var next = state.facingMode === "environment" ? "user" : "environment";
+    openCamera(next);
+  }
+
+  function closeCameraStreamOnly() {
+    if (state.stream) {
+      state.stream.getTracks().forEach(function (t) { t.stop(); });
+      state.stream = null;
+    }
+  }
+
+  /* ---------- gesture drawing (MediaPipe Hands, fully client-side/free) ---------- */
+
+  function resizeDrawCanvas() {
+    var rect = els.video.getBoundingClientRect();
+    els.drawCanvas.width = rect.width;
+    els.drawCanvas.height = rect.height;
+  }
+
+  function loadHandsScript() {
+    if (state.handsScriptLoaded && window.Hands) return Promise.resolve();
+    return new Promise(function (resolve, reject) {
+      var script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js";
+      script.crossOrigin = "anonymous";
+      script.onload = function () { state.handsScriptLoaded = true; resolve(); };
+      script.onerror = function () { reject(new Error("Couldn't load hand-tracking library.")); };
+      document.head.appendChild(script);
+    });
+  }
+
+  function ensureHands() {
+    if (state.handsInstance) return Promise.resolve(state.handsInstance);
+    return loadHandsScript().then(function () {
+      var hands = new window.Hands({
+        locateFile: function (file) { return "https://cdn.jsdelivr.net/npm/@mediapipe/hands/" + file; }
+      });
+      hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
+      hands.onResults(onHandResults);
+      state.handsInstance = hands;
+      return hands;
+    });
+  }
+
+  function toggleDrawMode() {
+    if (state.drawMode) {
+      stopDrawMode();
+      return;
+    }
+    els.drawModeBtn.textContent = "Loading\u2026";
+    ensureHands()
+      .then(function () {
+        state.drawMode = true;
+        state.drawLastPoint = null;
+        els.drawModeBtn.classList.add("active");
+        els.drawModeBtn.textContent = "Stop draw";
+        els.drawHint.classList.remove("hidden");
+        resizeDrawCanvas();
+        runDrawLoop();
+      })
+      .catch(function (err) {
+        els.drawModeBtn.textContent = "Draw";
+        addErrorMessage("Couldn't start gesture drawing (" + err.message + "). This needs an internet connection to load the hand-tracking model.");
+      });
+  }
+
+  function stopDrawMode() {
+    state.drawMode = false;
+    state.drawLastPoint = null;
+    els.drawModeBtn.classList.remove("active");
+    els.drawModeBtn.textContent = "Draw";
+    els.drawHint.classList.add("hidden");
+    var ctx = els.drawCanvas.getContext("2d");
+    if (ctx) ctx.clearRect(0, 0, els.drawCanvas.width, els.drawCanvas.height);
+  }
+
+  function runDrawLoop() {
+    if (!state.drawMode || els.cameraPanel.classList.contains("hidden")) return;
+    if (!state.handsInstance || !els.video.videoWidth) {
+      requestAnimationFrame(runDrawLoop);
+      return;
+    }
+    state.handsInstance.send({ image: els.video }).then(function () {
+      if (state.drawMode) requestAnimationFrame(runDrawLoop);
+    }).catch(function () {
+      if (state.drawMode) requestAnimationFrame(runDrawLoop);
+    });
+  }
+
+  function fingerUp(landmarks, tipIdx, pipIdx) {
+    return landmarks[tipIdx].y < landmarks[pipIdx].y;
+  }
+
+  function onHandResults(results) {
+    if (!state.drawMode) return;
+    var ctx = els.drawCanvas.getContext("2d");
+    var w = els.drawCanvas.width, h = els.drawCanvas.height;
+    var mirrored = state.facingMode === "user";
+
+    if (!results.multiHandLandmarks || !results.multiHandLandmarks.length) {
+      state.drawLastPoint = null;
+      return;
+    }
+    var lm = results.multiHandLandmarks[0];
+
+    var indexUp = fingerUp(lm, 8, 6);
+    var middleUp = fingerUp(lm, 12, 10);
+    var ringUp = fingerUp(lm, 16, 14);
+    var pinkyUp = fingerUp(lm, 20, 18);
+
+    var upCount = [indexUp, middleUp, ringUp, pinkyUp].filter(Boolean).length;
+
+    var px = (mirrored ? (1 - lm[8].x) : lm[8].x) * w;
+    var py = lm[8].y * h;
+
+    if (upCount === 0) {
+      // fist - clear the canvas
+      ctx.clearRect(0, 0, w, h);
+      state.drawLastPoint = null;
+      return;
+    }
+    if (indexUp && !middleUp && !ringUp && !pinkyUp) {
+      // pointing - draw
+      ctx.strokeStyle = "#5CFFB6";
+      ctx.lineWidth = 5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.shadowColor = "rgba(92,255,182,0.6)";
+      ctx.shadowBlur = 6;
+      if (state.drawLastPoint) {
+        ctx.beginPath();
+        ctx.moveTo(state.drawLastPoint.x, state.drawLastPoint.y);
+        ctx.lineTo(px, py);
+        ctx.stroke();
+      }
+      state.drawLastPoint = { x: px, y: py };
+    } else {
+      // open palm or any other pose - pen up, keep existing drawing
+      state.drawLastPoint = null;
+    }
+  }
+
+  function closeCamera() {
+    stopCameraLive();
+    stopDrawMode();
+    els.cameraPanel.classList.add("hidden");
+    closeCameraStreamOnly();
+  }
+
+  function captureFrameBase64() {
+    var w = els.video.videoWidth, h = els.video.videoHeight;
+    if (!w || !h) return null;
+    els.canvas.width = w;
+    els.canvas.height = h;
+    els.canvas.getContext("2d").drawImage(els.video, 0, 0, w, h);
+    return els.canvas.toDataURL("image/jpeg", 0.75).split(",")[1];
+  }
+
+  function stopCameraLive() {
+    state.cameraLive = false;
+    clearTimeout(state.liveCamTimer);
+    els.liveCamBtn.classList.remove("active");
+    els.liveCamBtn.textContent = "Go live";
+    els.liveCamBadge.classList.add("hidden");
+  }
+
+  function toggleCameraLive() {
+    if (state.cameraLive) {
+      stopCameraLive();
+      return;
+    }
+    state.cameraLive = true;
+    state.lastLiveDesc = null;
+    els.liveCamBtn.classList.add("active");
+    els.liveCamBtn.textContent = "Stop live";
+    els.liveCamBadge.classList.remove("hidden");
+    runCameraLiveLoop();
+  }
+
+  // Live narration loop: captures a frame, describes it, speaks it, then waits
+  // before the next frame. The pause (rather than true frame-by-frame video)
+  // is deliberate - it's what keeps this from instantly burning through the
+  // free-tier request quota the way a real video call's frame rate would.
+  function runCameraLiveLoop() {
+    if (!state.cameraLive || els.cameraPanel.classList.contains("hidden")) {
+      stopCameraLive();
+      return;
+    }
+    var base64 = captureFrameBase64();
+    if (!base64) {
+      state.liveCamTimer = setTimeout(runCameraLiveLoop, 1200);
+      return;
+    }
+    describeFrameLive(base64).then(function () {
+      if (state.cameraLive) {
+        state.liveCamTimer = setTimeout(runCameraLiveLoop, 3500);
+      }
+    });
+  }
+
+  function describeFrameLive(base64) {
+    var instruction = state.lastLiveDesc
+      ? "You're narrating a live camera feed like a companion glancing over my shoulder on a video call. Your last note was: \"" + state.lastLiveDesc + "\". Only say something new if what's in view has meaningfully changed; otherwise reply with something very brief like a short acknowledgement. One short sentence, conversational."
+      : "You're narrating a live camera feed like a companion glancing over my shoulder on a video call. Describe what's notable right now in one short, natural sentence.";
+    return fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 200,
+        system: SYSTEM_PROMPT,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
+            { type: "text", text: instruction }
+          ]
+        }]
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return null; }).then(function (errBody) {
+            var err = new Error((errBody && errBody.error) || ("HTTP " + res.status));
+            err.status = res.status;
+            throw err;
+          });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        var reply = (data.content || [])
+          .filter(function (b) { return b.type === "text"; })
+          .map(function (b) { return b.text; })
+          .join("")
+          .trim();
+        var langCode = null;
+        var m = reply.match(/^\[\[lang:([a-zA-Z-]+)\]\]\s*/);
+        if (m) { langCode = m[1]; reply = reply.slice(m[0].length).trim(); }
+        if (reply) {
+          state.lastLiveDesc = reply;
+          addMessage("assistant", "\uD83D\uDC41\uFE0F " + reply);
+          return speak(reply, langCode);
+        }
+      })
+      .catch(function (err) {
+        // Stop rather than keep retrying every few seconds into the same error (e.g. rate limit).
+        stopCameraLive();
+        var detail = err && err.message ? err.message : "error";
+        addErrorMessage("Live description stopped: " + detail + ".");
+      });
+  }
+
+  function captureAndDescribe() {
+    var base64 = captureFrameBase64();
+    if (!base64) return;
+    els.flash.classList.remove("pop");
+    void els.flash.offsetWidth;
+    els.flash.classList.add("pop");
+    setTimeout(function () {
+      closeCamera();
+      askClaude("\uD83D\uDCF7 Shared a look through the camera", [
+        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
+        { type: "text", text: "Describe what you see, conversationally, like a companion glancing at this with me." }
+      ]);
+    }, 180);
+  }
+})();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").catch(function () {
+      // Non-fatal - the app still works without the service worker, just without
+      // offline-shell caching and the "Add to Home Screen" install prompt.
+    });
+  });
+}
+</script>
+</body>
+</html>
